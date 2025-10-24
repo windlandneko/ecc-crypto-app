@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>ECC 椭圆曲线加密</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --surface: #ffffff;
+            --background: #f5f6fb;
+            --border: #dcdff0;
+            --border-strong: #b7bdde;
+            --text-primary: #1f1f2c;
+            --text-muted: #5b5f78;
+            --accent: #3a72ff;
+            --accent-soft: rgba(58, 91, 255, .1);
+            --radius-lg: 6px;
+            --radius-md: 4px;
+            --shadow-soft: 0 4px 10px rgba(25, 35, 80, .08);
+            --surface-alpha: rgba(255, 255, 255, .6);
+            --surface-alpha-strong: rgba(255, 255, 255, .8);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                color-scheme: dark;
+                --surface: #2d313c;
+                --background: #20242B;
+                --border: #2a2d3a;
+                --border-strong: #777c949b;
+                --text-primary: #e8eaf0;
+                --text-muted: #d9deec;
+                --accent: #5b8dff;
+                --accent-soft: rgba(91, 141, 255, .15);
+                --shadow-soft: 0 8px 24px rgba(0, 0, 0, .4);
+                --surface-alpha: rgba(32, 36, 43, .8);
+                --surface-alpha-strong: rgba(32, 36, 43, .9);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            min-height: 100vh;
+            user-select: none;
+        }
+
+        .app-shell {
+            max-width: 960px;
+            margin: 60px auto;
+            padding: 0 32px 80px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        .hero {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .hero h1 {
+            margin: 0 0 10px;
+            font-size: 32px;
+            font-weight: 600;
+        }
+
+        .hero p {
+            margin: 0;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .encoding-selector {
+            display: flex;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--surface-alpha);
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .encoding-btn {
+            background: transparent;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            padding: 6px 16px;
+            font-size: 13px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .encoding-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            box-shadow: 0 4px 12px rgba(58, 91, 255, .2);
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        section .card {
+            margin-bottom: 24px;
+        }
+
+        .key-card {
+            gap: 32px;
+        }
+
+        .card-head {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-head h2 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        .hint {
+            margin: 0;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .inline {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 24px;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 14px 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            background: var(--surface-alpha);
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            resize: vertical;
+            transition: border-color .2s ease, box-shadow .2s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+        }
+
+        .private-key-field.blurred {
+            filter: blur(8px);
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        button {
+            border: 1.5px solid transparent;
+            border-radius: 6px;
+            padding: 5px 14px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .ghost {
+            background: transparent;
+            border-color: var(--border-strong);
+            color: var(--text-muted);
+        }
+
+        .ghost:hover,
+        .ghost:focus {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .tab-bar {
+            display: inline-flex;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--surface-alpha-strong);
+            padding: 6px;
+            gap: 6px;
+            align-self: center;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .tab-btn {
+            background: transparent;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            padding: 8px 28px;
+            font-size: 15px;
+            color: var(--text-muted);
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            box-shadow: 0 8px 18px rgba(58, 91, 255, .25);
+        }
+
+        .panel {
+            display: none;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        @media (max-width: 640px) {
+            .hero {
+                padding: 24px;
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .encoding-selector {
+                justify-content: center;
+            }
+
+            .app-shell {
+                padding: 0 20px 60px;
+                margin: 40px auto;
+            }
+
+            .tab-bar {
+                align-self: stretch;
+                justify-content: center;
+            }
+
+            .tab-btn {
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-shell">
+        <header class="hero">
+            <div>
+                <h1>ECC 椭圆曲线加密</h1>
+                <p>使用 Web Crypto API 进行本地加解密，密钥对使用 Passkey 本地加密保存</p>
+            </div>
+            <div class="encoding-selector">
+                <button class="encoding-btn" data-encoding="base64">Base64</button>
+                <button class="encoding-btn" data-encoding="hex">十六进制</button>
+                <button class="encoding-btn active" data-encoding="dict">哈基米</button>
+            </div>
+        </header>
+
+        <nav class="tab-bar" aria-label="模式切换">
+            <button class="tab-btn active" data-target="sendPanel">发送信息</button>
+            <button class="tab-btn" data-target="receivePanel">接收信息</button>
+        </nav>
+
+        <section id="sendPanel" class="panel active">
+            <div class="card">
+                <div class="card-head">
+                    <h2>加密消息</h2>
+                    <p class="hint">粘贴对方给的公钥，然后输入想加密的消息。</p>
+                </div>
+                <div class="field">
+                    <label for="peerPublicKey">公钥</label>
+                    <textarea id="peerPublicKey" placeholder="粘贴对方提供的公钥"></textarea>
+                    <div class="button-row">
+                        <button class="ghost" onclick="pasteText('peerPublicKey')">粘贴</button>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="plaintext">明文</label>
+                    <textarea id="plaintext" placeholder="输入要发送的消息"></textarea>
+                    <div class="button-row">
+                        <button class="primary" onclick="encryptMessage()">加密消息</button>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="encryptedResult">加密结果（密文）</label>
+                    <textarea id="encryptedResult" readonly></textarea>
+                    <div class="button-row">
+                        <button class="ghost" onclick="copyText('encryptedResult')">复制</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="receivePanel" class="panel">
+            <div class="card">
+                <div class="card-head">
+                    <h2>生成密钥对</h2>
+                    <div class="actions">
+                        <label class="inline">
+                            <input type="checkbox" id="showPrivateKey" onclick="togglePrivateKeyDisplay()"> 显示私钥
+                        </label>
+                    </div>
+                </div>
+                <div class="grid">
+                    <div class="field">
+                        <label for="myPublicKey">公钥</label>
+                        <textarea id="myPublicKey" readonly></textarea>
+                        <div class="button-row">
+                            <button class="primary" onclick="generateKeyPair()">生成新密钥</button>
+                            <button class="ghost" onclick="copyText('myPublicKey')">复制</button>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="myPrivateKey">私钥</label>
+                        <textarea id="myPrivateKey" readonly class="private-key-field"></textarea>
+                        <div class="button-row">
+                            <button class="ghost" onclick="copyText('myPrivateKey')">复制</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-head">
+                    <h2>解密消息</h2>
+                    <p class="hint"></p>
+                </div>
+                <div class="field">
+                    <label for="ciphertext">密文</label>
+                    <textarea id="ciphertext"></textarea>
+                    <div class="button-row">
+                        <button class="primary" onclick="decryptMessage()">解密消息</button>
+                        <button class="ghost" onclick="pasteText('ciphertext')">粘贴并解密</button>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="decryptedResult">解密结果（明文）</label>
+                    <textarea id="decryptedResult" readonly></textarea>
+                    <div class="button-row">
+                        <button class="ghost" onclick="copyText('decryptedResult')">复制</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    <script>
+        const $ = id => document.getElementById(id)
+
+        let currentEncoding = 'dict'
+
+        // Type 1: Base64
+        const base64Encoding = {
+            arrayBufferToText: buffer => btoa(String.fromCharCode(...new Uint8Array(buffer))),
+            textToArrayBuffer: base64 => {
+                const binaryString = atob(base64)
+                const bytes = new Uint8Array(binaryString.length)
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i)
+                }
+                return bytes.buffer
+            },
+            delimiter: '|'
+        }
+
+        // Type 2: Hexadecimal
+        const hexEncoding = {
+            arrayBufferToText: buffer => Array.from(new Uint8Array(buffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join(''),
+            textToArrayBuffer: text => {
+                const matches = text.match(/[0-9a-f]{2}/gi)
+                if (!matches) throw new Error('Invalid hex format')
+                return new Uint8Array(matches.map(byte => parseInt(byte, 16))).buffer
+            },
+            delimiter: 'x'
+        }
+
+        // Type 3: Dictionary
+        const dict = '哈 基 米 曼波 奶龙 阿西噶 哈压库 老爷爷 踩背 楼上 叮咚鸡 大狗叫 一段 带一段 南北 绿豆'.split(' ').sort((a, b) => a.length - b.length)
+        const dictEncoding = {
+            arrayBufferToText: buffer => {
+                const bytes = new Uint8Array(buffer).reduce((a, b) => [...a, b >> 4 & 15, b & 15], [])
+
+                let counts = new Array(16).fill(0).map((_, i) => [0, i])
+                bytes.forEach(b => counts[b][0]++)
+                counts.sort((a, b) => b[0] - a[0])
+
+                const sortedDict = []
+                counts.forEach(([, rank], i) => sortedDict[rank] = dict[i])
+
+                return sortedDict.join('') + bytes.map(b => sortedDict[b]).join('')
+            },
+            textToArrayBuffer: text => {
+                let ptr = 0
+                const sortedDict = []
+
+                const nextToken = (word) => text.startsWith(word, ptr) && !(word === '哈' && text.startsWith('哈压库', ptr))
+
+                for (let i = 0; i < 16; i++) {
+                    const key = dict.filter(word => !sortedDict.includes(word)).find(nextToken)
+                    if (!key) throw new Error('Dictionary parse error')
+                    sortedDict.push(key)
+                    ptr += key.length
+                }
+                if (sortedDict.length !== dict.length) throw new Error('Dictionary parse error')
+
+                const bytes = []
+                while (ptr < text.length) {
+                    const highbit = sortedDict.findIndex(nextToken)
+                    if (highbit === -1) throw new Error('Text parse error')
+                    ptr += sortedDict[highbit].length
+
+                    const lowbit = sortedDict.findIndex(nextToken)
+                    if (lowbit === -1) throw new Error('Text parse error')
+                    ptr += sortedDict[lowbit].length
+
+                    bytes.push((highbit << 4) | lowbit)
+                }
+                return new Uint8Array(bytes).buffer
+            },
+            delimiter: '，'
+        }
+
+        const encodings = {
+            base64: base64Encoding,
+            hex: hexEncoding,
+            dict: dictEncoding
+        }
+
+        const getEncoding = () => encodings[currentEncoding]
+        const arrayBufferToText = buffer => getEncoding().arrayBufferToText(buffer)
+        const textToArrayBuffer = text => getEncoding().textToArrayBuffer(text)
+        const getDelimiter = () => getEncoding().delimiter
+
+        const copyText = async id => {
+            const element = document.getElementById(id)
+            const text = element.value
+            if (!text) return
+
+            try {
+                await navigator.clipboard.writeText(text)
+                return
+            } catch (err) {
+                element.select()
+                element.setSelectionRange(0, text.length)
+                document.execCommand('copy')
+            }
+        }
+
+        const pasteText = async id => {
+            const element = document.getElementById(id)
+            if (!element) return
+
+            try {
+                const text = await navigator.clipboard.readText()
+                element.value = text
+
+                // 如果是密文字段，自动触发解密
+                if (id === 'ciphertext' && text.trim()) {
+                    await decryptMessage()
+                }
+            } catch (err) {
+                console.warn('剪贴板读取失败，请手动粘贴', err)
+                alert('无法自动粘贴，请使用 Ctrl+V 手动粘贴')
+                element.focus()
+            }
+        }
+
+        let myPrivateKey
+        let myPrivateKeyExport = ''
+
+        const STORAGE_KEY = 'ecc_encrypted_keypair'
+        const PASSKEY_CHALLENGE = 'ecc-crypto-app-challenge'
+
+        // Passkey 相关函数
+        const hasStoredKeyPair = () => {
+            return localStorage.getItem(STORAGE_KEY) !== null
+        }
+
+        const createPasskeyCredential = async () => {
+            try {
+                const credential = await navigator.credentials.create({
+                    publicKey: {
+                        challenge: new TextEncoder().encode(PASSKEY_CHALLENGE),
+                        rp: {
+                            name: "ECC Crypto App",
+                            id: window.location.hostname
+                        },
+                        user: {
+                            id: crypto.getRandomValues(new Uint8Array(16)),
+                            name: "ECC 密钥对",
+                            displayName: "ECC 密钥对"
+                        },
+                        pubKeyCredParams: [
+                            { alg: -7, type: "public-key" },  // ES256
+                            { alg: -257, type: "public-key" } // RS256
+                        ],
+                        authenticatorSelection: {
+                            authenticatorAttachment: "platform",
+                            userVerification: "required"
+                        },
+                        timeout: 60000
+                    }
+                })
+                return credential
+            } catch (err) {
+                console.error('Passkey 创建失败:', err)
+                throw err
+            }
+        }
+
+        const verifyPasskey = async () => {
+            try {
+                const credential = await navigator.credentials.get({
+                    publicKey: {
+                        challenge: new TextEncoder().encode(PASSKEY_CHALLENGE),
+                        timeout: 60000,
+                        userVerification: "required"
+                    }
+                })
+                return credential
+            } catch (err) {
+                console.error('Passkey 验证失败:', err)
+                throw err
+            }
+        }
+
+        const encryptAndStoreKeyPair = async (publicKeyText, privateKeyText) => {
+            try {
+                // 使用 AES-GCM 加密密钥对
+                const encryptionKey = await crypto.subtle.generateKey(
+                    { name: 'AES-GCM', length: 256 },
+                    true,
+                    ['encrypt', 'decrypt']
+                )
+
+                const keyData = JSON.stringify({ publicKey: publicKeyText, privateKey: privateKeyText })
+                const iv = crypto.getRandomValues(new Uint8Array(12))
+                const encrypted = await crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv },
+                    encryptionKey,
+                    new TextEncoder().encode(keyData)
+                )
+
+                const exportedKey = await crypto.subtle.exportKey('raw', encryptionKey)
+
+                const prevEncoding = currentEncoding
+                currentEncoding = 'base64'
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    iv: arrayBufferToText(iv.buffer),
+                    encrypted: arrayBufferToText(encrypted),
+                    key: arrayBufferToText(exportedKey)
+                }))
+                currentEncoding = prevEncoding
+
+                return true
+            } catch (err) {
+                console.error('密钥对加密存储失败:', err)
+                return false
+            }
+        }
+
+        const decryptStoredKeyPair = async () => {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY)
+                if (!stored) return null
+
+                const { iv, encrypted, key } = JSON.parse(stored)
+
+                const prevEncoding = currentEncoding
+                currentEncoding = 'base64'
+
+                const decryptionKey = await crypto.subtle.importKey(
+                    'raw',
+                    textToArrayBuffer(key),
+                    { name: 'AES-GCM', length: 256 },
+                    false,
+                    ['decrypt']
+                )
+
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: textToArrayBuffer(iv) },
+                    decryptionKey,
+                    textToArrayBuffer(encrypted)
+                )
+
+                currentEncoding = prevEncoding
+
+                const keyData = JSON.parse(new TextDecoder().decode(decrypted))
+                return keyData
+            } catch (err) {
+                console.error('密钥对解密失败:', err)
+                return null
+            }
+        }
+
+        const loadStoredKeyPair = async () => {
+            try {
+                // 验证 Passkey
+                await verifyPasskey()
+
+                // 解密并加载密钥对
+                const keyData = await decryptStoredKeyPair()
+                if (!keyData) {
+                    console.warn('无法解密存储的密钥对')
+                    return false
+                }
+
+                // 导入私钥
+                myPrivateKey = await crypto.subtle.importKey(
+                    'pkcs8',
+                    textToArrayBuffer(keyData.privateKey),
+                    { name: 'ECDH', namedCurve: 'P-384' },
+                    true,
+                    ['deriveKey']
+                )
+
+                // 显示密钥
+                $('myPublicKey').value = keyData.publicKey
+                myPrivateKeyExport = keyData.privateKey
+                togglePrivateKeyDisplay()
+
+                return true
+            } catch (err) {
+                console.error('加载密钥对失败:', err)
+                return false
+            }
+        }
+
+        const generateRandomMask = (length = 400) => {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
+            return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+        }
+
+        const togglePrivateKeyDisplay = () => {
+            const shouldShow = $('showPrivateKey').checked
+            const field = $('myPrivateKey')
+
+            if (shouldShow) {
+                field.value = myPrivateKeyExport
+                field.classList.remove('blurred')
+            } else if (myPrivateKeyExport) {
+                field.value = generateRandomMask()
+                field.classList.add('blurred')
+            } else {
+                field.value = ''
+                field.classList.remove('blurred')
+            }
+        }
+
+        async function generateKeyPair() {
+            try {
+                // 检查是否已有存储的密钥对
+                let shouldSave = true
+                if (hasStoredKeyPair()) {
+                    const confirmed = confirm('本地已存在密钥对，生成新密钥将覆盖原有密钥。是否继续？')
+                    if (!confirmed) return
+                }
+
+                // 如果没有存储过密钥，先验证 Passkey
+                if (!hasStoredKeyPair()) {
+                    try {
+                        await createPasskeyCredential()
+                    } catch (err) {
+                        console.warn('Passkey 验证失败，将继续生成密钥但不保存到本地:', err)
+                        shouldSave = false
+                    }
+                }
+
+                const key = await crypto.subtle.generateKey(
+                    { name: 'ECDH', namedCurve: 'P-384' },
+                    true,
+                    ['deriveKey']
+                )
+
+                const publicKey = await crypto.subtle.exportKey('spki', key.publicKey)
+                const privateKey = await crypto.subtle.exportKey('pkcs8', key.privateKey)
+
+                const publicKeyText = arrayBufferToText(publicKey)
+                const privateKeyText = arrayBufferToText(privateKey)
+
+                $('myPublicKey').value = publicKeyText
+                myPrivateKeyExport = privateKeyText
+                togglePrivateKeyDisplay()
+
+                myPrivateKey = key.privateKey
+
+                // 自动保存到本地（如果 Passkey 验证成功）
+                if (shouldSave) {
+                    const saved = await encryptAndStoreKeyPair(publicKeyText, privateKeyText)
+                    if (saved) {
+                        console.log('密钥对已加密保存到本地')
+                    } else {
+                        console.warn('密钥对保存失败')
+                    }
+                }
+            } catch (err) {
+                console.error('密钥生成错误:', err)
+                alert('密钥生成失败，请检查控制台')
+            }
+        }
+
+        async function encryptMessage() {
+            const peerPublicKeyBase64 = $('peerPublicKey').value
+            const plaintext = $('plaintext').value
+
+            if (!peerPublicKeyBase64) {
+                alert('请输入对方公钥')
+                return
+            }
+
+            try {
+                const peerPublicKey = await crypto.subtle.importKey(
+                    'spki',
+                    textToArrayBuffer(peerPublicKeyBase64),
+                    { name: 'ECDH', namedCurve: 'P-384' },
+                    true,
+                    []
+                )
+                const ephemeralKeyPair = await crypto.subtle.generateKey(
+                    { name: 'ECDH', namedCurve: 'P-384' },
+                    true,
+                    ['deriveKey']
+                )
+                const sharedKey = await crypto.subtle.deriveKey(
+                    { name: 'ECDH', public: peerPublicKey },
+                    ephemeralKeyPair.privateKey,
+                    { name: 'AES-GCM', length: 256 },
+                    true,
+                    ['encrypt']
+                )
+                const iv = crypto.getRandomValues(new Uint8Array(12))
+                const encoder = new TextEncoder()
+                const encrypted = await crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv },
+                    sharedKey,
+                    encoder.encode(plaintext)
+                )
+                const ephemeralPublicKey = await crypto.subtle.exportKey(
+                    'spki',
+                    ephemeralKeyPair.publicKey
+                )
+
+                $('encryptedResult').value = [iv, encrypted, ephemeralPublicKey].map(arrayBufferToText).join(getDelimiter())
+            } catch (err) {
+                console.error('加密失败:', err)
+                alert('加密失败，请检查公钥格式')
+            }
+        }
+        async function decryptMessage() {
+            const ciphertextJson = $('ciphertext').value
+
+            if (!ciphertextJson || !myPrivateKey) return
+
+            try {
+                const data = ciphertextJson.split(getDelimiter()).map(text => text.trim()).filter(Boolean)
+                const ephemeralPublicKey = await crypto.subtle.importKey(
+                    'spki',
+                    textToArrayBuffer(data[2]),
+                    { name: 'ECDH', namedCurve: 'P-384' },
+                    true,
+                    []
+                )
+                const sharedKey = await crypto.subtle.deriveKey(
+                    { name: 'ECDH', public: ephemeralPublicKey },
+                    myPrivateKey,
+                    { name: 'AES-GCM', length: 256 },
+                    true,
+                    ['decrypt']
+                )
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: textToArrayBuffer(data[0]) },
+                    sharedKey,
+                    textToArrayBuffer(data[1])
+                )
+                $('decryptedResult').value = new TextDecoder().decode(decrypted)
+            } catch (err) {
+                console.error('解密失败:', err)
+                alert('解密失败，请检查数据格式')
+            }
+        }
+
+        const initTabs = () => {
+            const buttons = document.querySelectorAll('.tab-btn')
+            const panels = document.querySelectorAll('.panel')
+
+            buttons.forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const target = btn.dataset.target
+                    buttons.forEach(b => b.classList.toggle('active', b === btn))
+                    panels.forEach(panel => {
+                        panel.classList.toggle('active', panel.id === target)
+                    })
+
+                    // 如果切换到接收信息面板，且本地有密钥对，尝试自动加载
+                    if (target === 'receivePanel' && hasStoredKeyPair() && !myPrivateKey) {
+                        try {
+                            await loadStoredKeyPair()
+                        } catch (err) {
+                            console.warn('自动加载密钥对失败，已跳过:', err)
+                        }
+                    }
+                })
+            })
+        }
+
+        const initEncodingSelector = () => {
+            const buttons = document.querySelectorAll('.encoding-btn')
+            buttons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const encoding = btn.dataset.encoding
+                    currentEncoding = encoding
+                    buttons.forEach(b => b.classList.toggle('active', b === btn))
+                })
+            })
+        }
+
+        initTabs()
+        initEncodingSelector()
+    </script>
+</body>
+
+</html>
