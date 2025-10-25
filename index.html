@@ -730,6 +730,7 @@
             }
 
             try {
+                const prevEncoding = currentEncoding
                 const words = publicKey.split('')
                 if (words.every(c => "0123456789abcdef".includes(c))) {
                     setEncoding('hex')
@@ -746,6 +747,9 @@
                     true,
                     []
                 )
+
+                setEncoding(prevEncoding)
+
                 const ephemeralKeyPair = await crypto.subtle.generateKey(
                     { name: 'ECDH', namedCurve: 'P-384' },
                     true,
@@ -800,6 +804,9 @@
                     true,
                     []
                 )
+
+                setEncoding(prevEncoding)
+
                 const privateKey = await crypto.subtle.importKey(
                     'pkcs8',
                     myPrivateKey,
@@ -815,7 +822,6 @@
                     ['decrypt']
                 )
 
-                setEncoding(prevEncoding)
                 const decrypted = await crypto.subtle.decrypt(
                     { name: 'AES-GCM', iv: textToArrayBuffer(data[0]) },
                     sharedKey,
