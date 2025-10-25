@@ -799,9 +799,16 @@
                     true,
                     []
                 )
+                const privateKey = await crypto.subtle.importKey(
+                    'pkcs8',
+                    myPrivateKey,
+                    { name: 'ECDH', namedCurve: 'P-384' },
+                    true,
+                    ['deriveKey']
+                )
                 const sharedKey = await crypto.subtle.deriveKey(
                     { name: 'ECDH', public: ephemeralPublicKey },
-                    myPrivateKey,
+                    privateKey,
                     { name: 'AES-GCM', length: 256 },
                     true,
                     ['decrypt']
