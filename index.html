@@ -308,7 +308,6 @@
             }
 
             .hero h1 {
-                flex-wrap: wrap;
                 font-size: 24px;
                 margin-bottom: 8px;
             }
@@ -319,11 +318,12 @@
 
             .encoding-selector {
                 justify-content: center;
+                flex-wrap: wrap;
             }
+
             .encoding-btn {
                 padding: 8px 14px;
                 font-size: 14px;
-                margin: 40px auto;
             }
 
             .tab-bar {
@@ -447,7 +447,7 @@
             <div class="encoding-selector">
                 <button class="encoding-btn" data-encoding="base64">Base64</button>
                 <button class="encoding-btn" data-encoding="hex">十六进制</button>
-                <button class="encoding-btn active" data-encoding="dict">哈基米</button>
+                <button class="encoding-btn active" data-encoding="hajimi">哈基米</button>
             </div>
         </header>
 
@@ -492,7 +492,7 @@
                     <h2>生成密钥对</h2>
                     <div class="actions">
                         <label class="inline">
-                            <input type="checkbox" id="showPrivateKey" onclick="togglePrivateKeyDisplay()"> 显示私钥
+                            <input type="checkbox" id="showPrivateKey" onclick="renderCryptoKey()"> 显示私钥
                         </label>
                     </div>
                 </div>
@@ -509,7 +509,8 @@
                         <label for="myPrivateKey">私钥</label>
                         <textarea id="myPrivateKey" readonly class="private-key-field"></textarea>
                         <div class="button-row">
-                            <button class="ghost" onclick="copyText('myPrivateKey')">复制</button>
+                            <button id="copyPrivateKeyBtn" class="ghost" onclick="copyText('myPrivateKey')"
+                                disabled>复制</button>
                         </div>
                     </div>
                 </div>
@@ -540,7 +541,7 @@
     <script>
         const $ = id => document.getElementById(id)
 
-        let currentEncoding = 'dict'
+        let currentEncoding = 'hajimi'
 
         // Type 1: Base64
         const base64Encoding = {
@@ -573,6 +574,8 @@
         const dict = '哈 基 米 曼波 奶龙 阿西噶 哈压库 老爷爷 踩背 楼上 叮咚鸡 大狗叫 一段 带一段 南北 绿豆'.split(' ').sort((a, b) => a.length - b.length)
         const dictEncoding = {
             arrayBufferToText: buffer => {
+                if (!buffer?.length) return ''
+
                 const bytes = new Uint8Array(buffer).reduce((a, b) => [...a, b >> 4 & 15, b & 15], [])
 
                 let counts = new Array(16).fill(0).map((_, i) => [0, i])
@@ -585,6 +588,8 @@
                 return sortedDict.join('') + bytes.map(b => sortedDict[b]).join('')
             },
             textToArrayBuffer: text => {
+                if (!text?.length) return new ArrayBuffer(0)
+
                 let ptr = 0
                 const sortedDict = []
 
@@ -618,10 +623,18 @@
         const encodings = {
             base64: base64Encoding,
             hex: hexEncoding,
-            dict: dictEncoding
+            hajimi: dictEncoding
         }
 
         const getEncoding = () => encodings[currentEncoding]
+        const setEncoding = encoding => {
+            currentEncoding = encoding
+            renderCryptoKey()
+
+            const buttons = document.querySelectorAll('.encoding-btn')
+            buttons.forEach(b => b.classList.toggle('active', b.dataset.encoding === encoding))
+        }
+
         const arrayBufferToText = buffer => getEncoding().arrayBufferToText(buffer)
         const textToArrayBuffer = text => getEncoding().textToArrayBuffer(text)
         const getDelimiter = () => getEncoding().delimiter
@@ -660,234 +673,48 @@
             }
         }
 
-        let myPrivateKey
-        let myPrivateKeyExport = ''
-
-        const STORAGE_KEY = 'ecc_encrypted_keypair'
-        const PASSKEY_CHALLENGE = 'ecc-crypto-app-challenge'
-
-        // Passkey 相关函数
-        const hasStoredKeyPair = () => {
-            return localStorage.getItem(STORAGE_KEY) !== null
-        }
-
-        const createPasskeyCredential = async () => {
-            try {
-                const credential = await navigator.credentials.create({
-                    publicKey: {
-                        challenge: new TextEncoder().encode(PASSKEY_CHALLENGE),
-                        rp: {
-                            name: "ECC Crypto App",
-                            id: window.location.hostname
-                        },
-                        user: {
-                            id: crypto.getRandomValues(new Uint8Array(16)),
-                            name: "ECC 密钥对",
-                            displayName: "ECC 密钥对"
-                        },
-                        pubKeyCredParams: [
-                            { alg: -7, type: "public-key" },  // ES256
-                            { alg: -257, type: "public-key" } // RS256
-                        ],
-                        authenticatorSelection: {
-                            authenticatorAttachment: "platform",
-                            userVerification: "required"
-                        },
-                        timeout: 60000
-                    }
-                })
-                return credential
-            } catch (err) {
-                console.error('Passkey 创建失败:', err)
-                throw err
-            }
-        }
-
-        const verifyPasskey = async () => {
-            try {
-                const credential = await navigator.credentials.get({
-                    publicKey: {
-                        challenge: new TextEncoder().encode(PASSKEY_CHALLENGE),
-                        timeout: 60000,
-                        userVerification: "required"
-                    }
-                })
-                return credential
-            } catch (err) {
-                console.error('Passkey 验证失败:', err)
-                throw err
-            }
-        }
-
-        const encryptAndStoreKeyPair = async (publicKeyText, privateKeyText) => {
-            try {
-                // 使用 AES-GCM 加密密钥对
-                const encryptionKey = await crypto.subtle.generateKey(
-                    { name: 'AES-GCM', length: 256 },
-                    true,
-                    ['encrypt', 'decrypt']
-                )
-
-                const keyData = JSON.stringify({ publicKey: publicKeyText, privateKey: privateKeyText })
-                const iv = crypto.getRandomValues(new Uint8Array(12))
-                const encrypted = await crypto.subtle.encrypt(
-                    { name: 'AES-GCM', iv },
-                    encryptionKey,
-                    new TextEncoder().encode(keyData)
-                )
-
-                const exportedKey = await crypto.subtle.exportKey('raw', encryptionKey)
-
-                const prevEncoding = currentEncoding
-                currentEncoding = 'base64'
-                localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                    iv: arrayBufferToText(iv.buffer),
-                    encrypted: arrayBufferToText(encrypted),
-                    key: arrayBufferToText(exportedKey)
-                }))
-                currentEncoding = prevEncoding
-
-                return true
-            } catch (err) {
-                console.error('密钥对加密存储失败:', err)
-                return false
-            }
-        }
-
-        const decryptStoredKeyPair = async () => {
-            try {
-                const stored = localStorage.getItem(STORAGE_KEY)
-                if (!stored) return null
-
-                const { iv, encrypted, key } = JSON.parse(stored)
-
-                const prevEncoding = currentEncoding
-                currentEncoding = 'base64'
-
-                const decryptionKey = await crypto.subtle.importKey(
-                    'raw',
-                    textToArrayBuffer(key),
-                    { name: 'AES-GCM', length: 256 },
-                    false,
-                    ['decrypt']
-                )
-
-                const decrypted = await crypto.subtle.decrypt(
-                    { name: 'AES-GCM', iv: textToArrayBuffer(iv) },
-                    decryptionKey,
-                    textToArrayBuffer(encrypted)
-                )
-
-                currentEncoding = prevEncoding
-
-                const keyData = JSON.parse(new TextDecoder().decode(decrypted))
-                return keyData
-            } catch (err) {
-                console.error('密钥对解密失败:', err)
-                return null
-            }
-        }
-
-        const loadStoredKeyPair = async () => {
-            try {
-                // 验证 Passkey
-                await verifyPasskey()
-
-                // 解密并加载密钥对
-                const keyData = await decryptStoredKeyPair()
-                if (!keyData) {
-                    console.warn('无法解密存储的密钥对')
-                    return false
-                }
-
-                // 导入私钥
-                myPrivateKey = await crypto.subtle.importKey(
-                    'pkcs8',
-                    textToArrayBuffer(keyData.privateKey),
-                    { name: 'ECDH', namedCurve: 'P-384' },
-                    true,
-                    ['deriveKey']
-                )
-
-                // 显示密钥
-                $('myPublicKey').value = keyData.publicKey
-                myPrivateKeyExport = keyData.privateKey
-                togglePrivateKeyDisplay()
-
-                return true
-            } catch (err) {
-                console.error('加载密钥对失败:', err)
-                return false
-            }
-        }
+        let myPublicKey = null
+        let myPrivateKey = null
 
         const generateRandomMask = (length = 400) => {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
-            return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+            return new Uint8Array(length).map(() => chars.charCodeAt(Math.floor(Math.random() * chars.length))).buffer
         }
 
-        const togglePrivateKeyDisplay = () => {
+        const renderCryptoKey = () => {
+            $('myPublicKey').value = arrayBufferToText(myPublicKey)
+
             const shouldShow = $('showPrivateKey').checked
             const field = $('myPrivateKey')
+            const copyBtn = $('copyPrivateKeyBtn')
 
             if (shouldShow) {
-                field.value = myPrivateKeyExport
+                field.value = arrayBufferToText(myPrivateKey)
                 field.classList.remove('blurred')
-            } else if (myPrivateKeyExport) {
-                field.value = generateRandomMask()
+                copyBtn.disabled = false
+            } else if (myPrivateKey !== null) {
+                field.value = arrayBufferToText(generateRandomMask())
                 field.classList.add('blurred')
+                copyBtn.disabled = true
             } else {
                 field.value = ''
                 field.classList.remove('blurred')
+                copyBtn.disabled = true
             }
         }
 
         async function generateKeyPair() {
             try {
-                // 检查是否已有存储的密钥对
-                let shouldSave = true
-                if (hasStoredKeyPair()) {
-                    const confirmed = confirm('本地已存在密钥对，生成新密钥将覆盖原有密钥。是否继续？')
-                    if (!confirmed) return
-                }
-
-                // 如果没有存储过密钥，先验证 Passkey
-                if (!hasStoredKeyPair()) {
-                    try {
-                        await createPasskeyCredential()
-                    } catch (err) {
-                        console.warn('Passkey 验证失败，将继续生成密钥但不保存到本地:', err)
-                        shouldSave = false
-                    }
-                }
-
                 const key = await crypto.subtle.generateKey(
                     { name: 'ECDH', namedCurve: 'P-384' },
                     true,
                     ['deriveKey']
                 )
 
-                const publicKey = await crypto.subtle.exportKey('spki', key.publicKey)
-                const privateKey = await crypto.subtle.exportKey('pkcs8', key.privateKey)
+                myPublicKey = await crypto.subtle.exportKey('spki', key.publicKey)
+                myPrivateKey = await crypto.subtle.exportKey('pkcs8', key.privateKey)
 
-                const publicKeyText = arrayBufferToText(publicKey)
-                const privateKeyText = arrayBufferToText(privateKey)
-
-                $('myPublicKey').value = publicKeyText
-                myPrivateKeyExport = privateKeyText
-                togglePrivateKeyDisplay()
-
-                myPrivateKey = key.privateKey
-
-                // 自动保存到本地（如果 Passkey 验证成功）
-                if (shouldSave) {
-                    const saved = await encryptAndStoreKeyPair(publicKeyText, privateKeyText)
-                    if (saved) {
-                        console.log('密钥对已加密保存到本地')
-                    } else {
-                        console.warn('密钥对保存失败')
-                    }
-                }
+                renderCryptoKey()
             } catch (err) {
                 console.error('密钥生成错误:', err)
                 alert('密钥生成失败，请检查控制台')
@@ -895,18 +722,27 @@
         }
 
         async function encryptMessage() {
-            const peerPublicKeyBase64 = $('peerPublicKey').value
+            const publicKey = $('peerPublicKey').value
             const plaintext = $('plaintext').value
 
-            if (!peerPublicKeyBase64) {
+            if (!publicKey) {
                 alert('请输入对方公钥')
                 return
             }
 
             try {
+                const words = publicKey.split('')
+                if (words.every(c => "0123456789abcdef".includes(c))) {
+                    setEncoding('hex')
+                } else if (words.includes("=") || words.includes("/") || words.includes("+")) {
+                    setEncoding('base64')
+                } else if (words.includes("哈") || words.includes("基") || words.includes("米")) {
+                    setEncoding('hajimi')
+                }
+
                 const peerPublicKey = await crypto.subtle.importKey(
                     'spki',
-                    textToArrayBuffer(peerPublicKeyBase64),
+                    textToArrayBuffer(publicKey),
                     { name: 'ECDH', namedCurve: 'P-384' },
                     true,
                     []
@@ -947,6 +783,15 @@
             if (!ciphertextJson || !myPrivateKey) return
 
             try {
+                const words = ciphertextJson.split('')
+                if (words.every(c => "0123456789abcdef".includes(c))) {
+                    setEncoding('hex')
+                } else if (words.includes("=") || words.includes("/") || words.includes("+")) {
+                    setEncoding('base64')
+                } else if (words.includes("哈") || words.includes("基") || words.includes("米")) {
+                    setEncoding('hajimi')
+                }
+
                 const data = ciphertextJson.split(getDelimiter()).map(text => text.trim()).filter(Boolean)
                 const ephemeralPublicKey = await crypto.subtle.importKey(
                     'spki',
@@ -985,15 +830,6 @@
                     panels.forEach(panel => {
                         panel.classList.toggle('active', panel.id === target)
                     })
-
-                    // 如果切换到接收信息面板，且本地有密钥对，尝试自动加载
-                    if (target === 'receivePanel' && hasStoredKeyPair() && !myPrivateKey) {
-                        try {
-                            await loadStoredKeyPair()
-                        } catch (err) {
-                            console.warn('自动加载密钥对失败，已跳过:', err)
-                        }
-                    }
                 })
             })
         }
@@ -1001,11 +837,7 @@
         const initEncodingSelector = () => {
             const buttons = document.querySelectorAll('.encoding-btn')
             buttons.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const encoding = btn.dataset.encoding
-                    currentEncoding = encoding
-                    buttons.forEach(b => b.classList.toggle('active', b === btn))
-                })
+                btn.addEventListener('click', () => setEncoding(btn.dataset.encoding))
             })
         }
 
