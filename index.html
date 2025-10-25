@@ -574,9 +574,8 @@
         const dict = '哈 基 米 曼波 奶龙 阿西噶 哈压库 老爷爷 踩背 楼上 叮咚鸡 大狗叫 一段 带一段 南北 绿豆'.split(' ').sort((a, b) => a.length - b.length)
         const dictEncoding = {
             arrayBufferToText: buffer => {
-                if (!buffer?.length) return ''
-
                 const bytes = new Uint8Array(buffer).reduce((a, b) => [...a, b >> 4 & 15, b & 15], [])
+                if (!bytes?.length) return ''
 
                 let counts = new Array(16).fill(0).map((_, i) => [0, i])
                 bytes.forEach(b => counts[b][0]++)
