@@ -732,9 +732,9 @@
             try {
                 const prevEncoding = currentEncoding
                 const words = publicKey.split('')
-                if (words.every(c => "0123456789abcdef".includes(c))) {
+                if (words.every(c => "0123456789abcdef x\r\n".includes(c))) {
                     setEncoding('hex')
-                } else if (words.includes("=") || words.includes("/") || words.includes("+")) {
+                } else if (words.includes("=") || words.includes("|") || words.includes("+")) {
                     setEncoding('base64')
                 } else if (words.includes("哈") || words.includes("基") || words.includes("米")) {
                     setEncoding('hajimi')
@@ -788,9 +788,9 @@
             try {
                 const prevEncoding = currentEncoding
                 const words = ciphertextJson.split('')
-                if (words.every(c => "0123456789abcdef".includes(c))) {
+                if (words.every(c => "0123456789abcdef x\r\n".includes(c))) {
                     setEncoding('hex')
-                } else if (words.includes("=") || words.includes("/") || words.includes("+")) {
+                } else if (words.includes("=") || words.includes("|") || words.includes("+")) {
                     setEncoding('base64')
                 } else if (words.includes("哈") || words.includes("基") || words.includes("米")) {
                     setEncoding('hajimi')
