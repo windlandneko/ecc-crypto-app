@@ -782,6 +782,7 @@
             if (!ciphertextJson || !myPrivateKey) return
 
             try {
+                const prevEncoding = currentEncoding
                 const words = ciphertextJson.split('')
                 if (words.every(c => "0123456789abcdef".includes(c))) {
                     setEncoding('hex')
@@ -813,6 +814,8 @@
                     true,
                     ['decrypt']
                 )
+
+                setEncoding(prevEncoding)
                 const decrypted = await crypto.subtle.decrypt(
                     { name: 'AES-GCM', iv: textToArrayBuffer(data[0]) },
                     sharedKey,
